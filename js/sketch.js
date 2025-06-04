@@ -1,34 +1,3 @@
-// ジェスチャーの種類
-// 👍(Thumb_Up), 👎(Thumb_Down), ✌️(Victory), 
-// ☝️(Pointng_Up), ✊(Closed_Fist), 👋(Open_Palm), 
-// 🤟(ILoveYou)
-function getCode(left_gesture, right_gesture) {
-  let code_array = {
-    "Thumb_Up": 1,
-    "Thumb_Down": 2,
-    "Victory": 3,
-    "Pointing_Up": 4,
-    "Closed_Fist": 5,
-    "Open_Palm": 6,
-  }
-  let left_code = code_array[left_gesture];
-  let right_code = code_array[right_gesture];
-  // left_codeとright_codeを文字として結合
-  let code = String(left_code) + String(right_code);
-  return code;
-}
-
-function getCharacter(code) {
-  const codeToChar = {
-    "11": "a", "12": "b", "13": "c", "14": "d", "15": "e", "16": "f",
-    "21": "g", "22": "h", "23": "i", "24": "j", "25": "k", "26": "l",
-    "31": "m", "32": "n", "33": "o", "34": "p", "35": "q", "36": "r",
-    "41": "s", "42": "t", "43": "u", "44": "v", "45": "w", "46": "x",
-    "51": "y", "52": "z", "53": " ", "54": "backspace"
-  };
-  return codeToChar[code] || "";
-}
-
 // 入力サンプル文章 
 let sample_texts = [
   "the quick brown fox jumps over the lazy dog",
@@ -49,19 +18,18 @@ let game_start_time = 0;
 let gestures_results;
 let cam = null;
 let p5canvas = null;
+let lastChar = "";
+let lastCharTime = 0;
 
 function setup() {
   p5canvas = createCanvas(320, 240);
   p5canvas.parent('#canvas');
 
   // When gestures are found, the following function is called. The detection results are stored in results.
-  let lastChar = "";
-  let lastCharTime = millis();
-
   gotGestures = function (results) {
     gestures_results = results;
 
-    if (results.gestures.length == 2) {
+    if (results.gestures.length >= 1) {
       if (game_mode.now == "ready" && game_mode.previous == "notready") {
         // ゲーム開始前の状態から、カメラが起動した後の状態に変化した場合
         game_mode.previous = game_mode.now;
@@ -69,31 +37,54 @@ function setup() {
         document.querySelector('input').value = ""; // 入力欄をクリア
         game_start_time = millis(); // ゲーム開始時間を記録
       }
-      let left_gesture;
-      let right_gesture;
-      if (results.handedness[0][0].categoryName == "Left") {
-        left_gesture = results.gestures[0][0].categoryName;
-        right_gesture = results.gestures[1][0].categoryName;
-      } else {
-        left_gesture = results.gestures[1][0].categoryName;
-        right_gesture = results.gestures[0][0].categoryName;
+      const inputValue = document.querySelector('input').value;
+      const target = sample_texts[0];
+      const keyboard = {
+        "q":0,"w":1,"e":2,"r":3,"t":4,"y":5,"u":6,"i":7,"o":8,"p":9,
+        "a":10,"s":11,"d":12,"f":13,"g":14,"h":15,"j":16,"k":17,"l":18,
+        "z":19,"x":20,"c":21,"v":22,"b":23,"n":24,"m":25,"space":26,
       }
-      let code = getCode(left_gesture, right_gesture);
-      let c = getCharacter(code);
+      if (!target) return; // sample_texts が空なら何もしない
+      const expectedChar = target[inputValue.length];
 
       let now = millis();
-      if (c === lastChar) {
-        if (now - lastCharTime > 1000) {
-          // 1秒以上cが同じ値である場合の処理
-          typeChar(c);
-          lastCharTime = now;
+
+      for (let i = 0; i < results.gestures.length; i++) {
+        if (results.gestures[i] && results.gestures[i][0]) {
+          let gesture = results.gestures[i][0].categoryName;
+          let char = gesture;
+          if(expectedChar === " ") {
+            if(char === "space"){
+              char = " ";
+              typeChar(char);
+            }
+          }
+          if (keyboard[char] !== undefined && keyboard[expectedChar] !== undefined) {
+            const charIndex = keyboard[char];
+            const expectedIndex = keyboard[expectedChar];
+
+            if (Math.abs(charIndex - expectedIndex) <= 3 || (char === "backspace" && inputValue.length > 0)) {
+              //1=90s,2=75s,3=50s,4=40s,5=30s,10=13sくらいの目安;
+              char = expectedChar;
+              if (char === lastChar) {
+                if (char === "backspace") {
+                  if(now - lastCharTime > 500) { // バックスペースは長めの時間間隔
+                    typeChar(char);
+                    lastCharTime = now;
+                  }
+                } else if (now - lastCharTime > 150) { // 時間間隔短めに
+                  typeChar(char);
+                  lastCharTime = now;
+                }
+              } else {
+                lastChar = char;
+                lastCharTime = now;
+              }
+            }
+          }
         }
-      } else {
-        lastChar = c;
-        lastCharTime = now;
       }
     }
-
   }
 }
 
